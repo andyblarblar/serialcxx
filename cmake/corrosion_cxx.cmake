@@ -7,7 +7,6 @@ function(add_library_rust)
     # set(MULTI_VALUE_KEYWORDS)
     cmake_parse_arguments(_RUST_LIB "${OPTIONS}" "${ONE_VALUE_KEYWORDS}" "${MULTI_VALUE_KEYWORDS}" ${ARGN})
 
-
     ### Check inputs
     if("${_RUST_LIB_PATH}" STREQUAL "")
         message(FATAL_ERROR "add_library_rust called without a given path to root of a rust crate, fix by adding 'PATH <pathToRustlibRoot>'")
