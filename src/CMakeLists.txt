@@ -1,13 +1,13 @@
-add_executable(${PROJECT_NAME})
+add_executable(${PROJECT_NAME}-test)
 
-target_sources(${PROJECT_NAME}
+target_sources(${PROJECT_NAME}-test
     PRIVATE
         main.cpp
 )
 
-add_library_rust(PATH rusty_code NAMESPACE my)
+add_library_rust(PATH serialcxx NAMESPACE ealovega)
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME}-test
     PUBLIC
-        my::rusty_code
+        ealovega::serialcxx
 )

@@ -1,4 +1,4 @@
-#include "rusty_code/src/lib.rs.h"
+#include "serialcxx/src/lib.rs.h"
 #include <iostream>
 
 extern "C" {

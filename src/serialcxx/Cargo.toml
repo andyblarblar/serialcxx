@@ -1,7 +1,7 @@
 [package]
-name = "rusty_code"
+name = "serialcxx"
 version = "0.1.0"
-authors = ["Trond H Emaus <trondhe@gmail.com>"]
+authors = ["Andrew Ealovega <Andrew@Ealovega.dev>"]
 edition = "2018"
 
 [dependencies]
