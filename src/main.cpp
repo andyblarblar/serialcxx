@@ -1,14 +1,15 @@
 #include "serialcxx/src/lib.rs.h"
 #include <iostream>
+#include "D:\temp schoolwork\serialcxx\src\serialcxx\target\bindings.hpp"
 
-extern "C" {
-int32_t rusty_extern_c_integer();
+uint32_t add(uint32_t in) {
+  return in;
 }
 
 int main() {
-  std::cout << "A value given via generated cxxbridge "
-            << rusty_cxxbridge_integer() << "\n";
-  std::cout << "A value given directly by extern c function "
-            << rusty_extern_c_integer() << "\n";
+  auto port = open_port("asd",115000);
+  add_read_callback(port.into_raw(), &add);
   return 0;
 }
+
+
