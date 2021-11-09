@@ -1,6 +1,6 @@
 #include "serialcxx/src/lib.rs.h"
 #include <iostream>
-#include "D:\temp schoolwork\serialcxx\src\serialcxx\target\bindings.hpp"
+#include "/home/andy/CLionProjects/serialcxx/src/serialcxx/generated/bindings.hpp"
 
 uint32_t add(uint32_t in) {
   return in;
