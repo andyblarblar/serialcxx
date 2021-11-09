@@ -56,6 +56,10 @@ function(add_library_rust)
             ${BINDING_HEADER}
             ${BINDING_SOURCE}
     )
+
+    #TODO if we ever need to include other headers add it here. Currently anything in target/cxxbridge/serialcxx is included,
+    #And can be refrenced relitive to that directory ie "serialcxx/src/someheader.h". If you want anything to not be relitive,
+    #Just write it to the root of serialcxx, so it becomes "serialcxx/someheader.hpp".
     target_include_directories(${_LIB_PATH_STEM}_cxxbridge
         PUBLIC
             ${CXX_BINDING_INCLUDE_DIR}
@@ -68,7 +72,7 @@ function(add_library_rust)
             ${_LIB_PATH_STEM}_cxxbridge
             ${_LIB_PATH}
     )
-    # for end-user to link into project
+    # for end-user to link into project (you can still use the above interface too)
     add_library(${_NAMESPACE}::${_LIB_PATH} ALIAS ${_LIB_PATH}-total)
     
 endfunction(add_library_rust)
