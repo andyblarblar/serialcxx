@@ -1,12 +1,12 @@
-use crate::ffi::{ReadResult, SerialError};
+use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
 use cxx::CxxString;
-use serialport::{Result, SerialPort};
+use serialport::{DataBits, Result, SerialPort, StopBits};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::pin::Pin;
 use std::time::Duration;
 
 pub struct Serial {
-    raw_port: Box<dyn SerialPort>
+    raw_port: Box<dyn SerialPort>,
 }
 
 impl Serial {
@@ -15,9 +15,98 @@ impl Serial {
             .timeout(Duration::from_secs(99999))
             .open()?;
 
-        Ok(Serial {
-            raw_port,
-        })
+        Ok(Serial { raw_port })
+    }
+
+    /// Sets the timeout for this port.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_timeout(&mut self, sec: f32) -> bool {
+        self.raw_port
+            .set_timeout(Duration::from_secs_f32(sec))
+            .is_ok()
+    }
+
+    /// Sets the character size of this port.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_data_size(&mut self, bits: CharSize) -> bool {
+        self.raw_port
+            .set_data_bits(match bits {
+                CharSize::Five => DataBits::Five,
+                CharSize::Six => DataBits::Six,
+                CharSize::Seven => DataBits::Seven,
+                CharSize::Eight => DataBits::Eight,
+                _ => DataBits::Eight
+            })
+            .is_ok()
+    }
+
+    /// Sets the baud rate of the port.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_baud_rate(&mut self, baud: u32) -> bool {
+        self.raw_port.set_baud_rate(baud).is_ok()
+    }
+
+    /// Sets the number of stop bits.
+    /// True for two stop bits, false for one.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_stop_bits(&mut self, two_bits: bool) -> bool {
+        self.raw_port
+            .set_stop_bits(if two_bits {
+                StopBits::Two
+            } else {
+                StopBits::One
+            })
+            .is_ok()
+    }
+
+    /// Sets the parity checking mode.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_parity(&mut self, mode: Parity) -> bool {
+        self.raw_port
+            .set_parity(match mode {
+                Parity::Even => serialport::Parity::Even,
+                Parity::Odd => serialport::Parity::Odd,
+                Parity::None => serialport::Parity::None,
+                _ => serialport::Parity::None
+            })
+            .is_ok()
+    }
+
+    /// Sets the flow control mode.
+    ///
+    /// Returns true if the operation succeeded.
+    ///
+    /// Note that settings changes will not propagate between the serial port and any open readers
+    /// or other clones. Consider configuring the port before cloning.
+    pub fn set_flow_control(&mut self, mode: FlowControl) -> bool {
+        self.raw_port
+            .set_flow_control(match mode {
+                FlowControl::Hardware => serialport::FlowControl::Hardware,
+                FlowControl::Software => serialport::FlowControl::Software,
+                FlowControl::None => serialport::FlowControl::None,
+                _ => serialport::FlowControl::None
+            })
+            .is_ok()
     }
 
     /// Attempts to write the entire buffer of bytes to the serial device.
@@ -106,8 +195,8 @@ impl Serial {
         if let Err(_) = cloned_port {
             return ReadResult {
                 error: SerialError::PortIOErr,
-                bytes_read: 0
-            }
+                bytes_read: 0,
+            };
         }
 
         //We need a bufreader to use readline, as there is no EOF from a serial port.
@@ -135,7 +224,6 @@ impl Serial {
         }
     }
 
-    //TODO add getters and setters for timout, bit size, ect.
     //TODO add a async reader using another thread and BufRead around the ports reader
 }
 

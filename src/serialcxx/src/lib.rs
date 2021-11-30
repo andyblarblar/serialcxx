@@ -24,6 +24,26 @@ pub mod ffi {
         Other
     }
 
+    pub enum CharSize {
+        Five,
+        Six,
+        Seven,
+        Eight
+    }
+
+    pub enum Parity {
+        Even,
+        Odd,
+        None
+    }
+
+    pub enum FlowControl {
+        Hardware,
+        Software,
+        None
+    }
+
+    //The Serial class
     extern "Rust" {
         type Serial;
 
@@ -71,5 +91,54 @@ pub mod ffi {
         /// Attempts to open the serial device at path, using the specified baud rate.
         /// Defaults to a timeout of 99999 seconds.
         fn open_port(path: &str, baud: u32) -> Result<Box<Serial>>;
+
+        /// Sets the timeout for this port.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_timeout(self: &mut Serial, sec: f32) -> bool;
+
+        /// Sets the character size of this port.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_data_size(self: &mut Serial, bits: CharSize) -> bool;
+
+        /// Sets the baud rate of the port.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_baud_rate(self: &mut Serial, baud: u32) -> bool;
+
+        /// Sets the number of stop bits.
+        /// True for two stop bits, false for one.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_stop_bits(self: &mut Serial, two_bits: bool) -> bool;
+
+        /// Sets the parity checking mode.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_parity(self: &mut Serial, mode: Parity) -> bool;
+
+        /// Sets the flow control mode.
+        ///
+        /// Returns true if the operation succeeded.
+        ///
+        /// Note that settings changes will not propagate between the serial port and any open readers
+        /// or other clones. Consider configuring the port before cloning.
+        pub fn set_flow_control(self: &mut Serial, mode: FlowControl) -> bool;
     }
 }

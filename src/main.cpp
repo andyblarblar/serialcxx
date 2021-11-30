@@ -6,6 +6,9 @@ int main() {
   auto readPort = serialcxx::open_port("/dev/pts/2", 115'000);
   auto port = serialcxx::open_port("/dev/pts/3", 115'000);
 
+  port->set_timeout(2.5);
+  readPort->set_timeout(2.5);
+
   auto str = "Hello From C++!\n";
   port->write_str(str);
 
