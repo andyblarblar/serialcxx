@@ -18,6 +18,8 @@ pub mod ffi {
         NoErr = 0,
         /// The operation was interrupted, but did not fail. Can be started again.
         Interrupted,
+        /// The port errored while opening or cloning.
+        PortIOErr,
         /// Uncategorized error.
         Other
     }
@@ -53,14 +55,18 @@ pub mod ffi {
         /// - Other - Any other kind of device failure, such as a disconnect.
         fn read(self: &mut Serial, read_buff: &mut [u8]) -> ReadResult;
 
-        /// Attempts to read the remaining serial device's buffer into the passed std::string.
+        /// Attempts to read a line from the buffer.
+        ///
+        /// A line is defined by a terminating \n or \r\n, neither of which will be present in the
+        /// returned string.
         ///
         /// Errors
         /// ------
         ///
         /// - Interrupted - The device transfer was interrupted. You may retry this transfer.
+        /// - PortIOErr - The port failed to clone handle for reads.
         /// - Other - Any other kind of device failure, such as a disconnect.
-        fn read_to_str_buff(self: &mut Serial, read_buff: Pin<&mut CxxString>) -> ReadResult;
+        fn read_line(self: &mut Serial, read_buff: Pin<&mut CxxString>) -> ReadResult;
 
         /// Attempts to open the serial device at path, using the specified baud rate.
         /// Defaults to a timeout of 99999 seconds.

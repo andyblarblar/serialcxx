@@ -1,20 +1,22 @@
 use crate::ffi::{ReadResult, SerialError};
 use cxx::CxxString;
 use serialport::{Result, SerialPort};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::pin::Pin;
 use std::time::Duration;
 
 pub struct Serial {
-    raw_port: Box<dyn SerialPort>,
+    raw_port: Box<dyn SerialPort>
 }
 
 impl Serial {
     pub fn new(path: &str, baud: u32) -> Result<Serial> {
+        let raw_port = serialport::new(path, baud)
+            .timeout(Duration::from_secs(99999))
+            .open()?;
+
         Ok(Serial {
-            raw_port: serialport::new(path, baud)
-                .timeout(Duration::from_secs(99999))
-                .open()?,
+            raw_port,
         })
     }
 
@@ -86,19 +88,34 @@ impl Serial {
         }
     }
 
-    /// Attempts to read the remaining serial device's buffer into the passed std::string.
+    /// Attempts to read a line from the buffer.
+    ///
+    /// A line is defined by a terminating \n or \r\n, neither of which will be present in the
+    /// returned string.
     ///
     /// Errors
     /// ------
     ///
     /// - Interrupted - The device transfer was interrupted. You may retry this transfer.
+    /// - PortIOErr - The port failed to clone handle for reads.
     /// - Other - Any other kind of device failure, such as a disconnect.
-    pub fn read_to_str_buff(&mut self, read_buff: Pin<&mut CxxString>) -> ReadResult {
+    pub fn read_line(&mut self, read_buff: Pin<&mut CxxString>) -> ReadResult {
         let mut rust_buff = String::new();
-        let read_num = self.raw_port.read_to_string(&mut rust_buff);//TODO serial has no EOF, thus this never stops. need to wrap reader in bufreader and use deliminators.
+        let cloned_port = self.raw_port.try_clone();
 
-        //Copy rust string to C++
-        read_buff.push_str(&rust_buff[..]);
+        if let Err(_) = cloned_port {
+            return ReadResult {
+                error: SerialError::PortIOErr,
+                bytes_read: 0
+            }
+        }
+
+        //We need a bufreader to use readline, as there is no EOF from a serial port.
+        let mut reader = BufReader::new(cloned_port.unwrap());
+        let read_num = reader.read_line(&mut rust_buff);
+
+        //Copy rust string to C++. Use lines iter to remove newline. This can prob be more efficient.
+        read_buff.push_str(rust_buff.lines().take(1).collect::<String>().as_str());
 
         match read_num {
             Ok(bytes_read) => ReadResult {
@@ -120,10 +137,6 @@ impl Serial {
 
     //TODO add getters and setters for timout, bit size, ect.
     //TODO add a async reader using another thread and BufRead around the ports reader
-
-    pub fn callback(&self, fnc: extern "C" fn(input: u32) -> u32) {
-        fnc(5);
-    }
 }
 
 /// Attempts to open the serial device at path, using the specified baud rate.
