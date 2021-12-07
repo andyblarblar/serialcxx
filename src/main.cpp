@@ -1,6 +1,10 @@
 #include "serialcxx/serialcxx.hpp"
 #include <iostream>
 
+void testCall(void *userdata, const char *str, uintptr_t size) {
+  printf("Read '%s' from the port!", str);
+}
+
 //Test with socat -d -d pty,raw,echo=0 pty,raw,echo=0
 int main() {
   auto readPort = serialcxx::open_port("/dev/pts/2", 115'000);
@@ -8,6 +12,10 @@ int main() {
 
   port->set_timeout(2.5);
   readPort->set_timeout(2.5);
+
+  auto builder = readPort->create_listener_builder();
+  serialcxx::add_read_callback(builder->self_ptr(), nullptr, &testCall);
+  auto listener = builder->build();
 
   auto str = "Hello From C++!\n";
   port->write_str(str);

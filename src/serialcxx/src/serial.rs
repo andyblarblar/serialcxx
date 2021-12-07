@@ -1,9 +1,13 @@
-use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
-use cxx::CxxString;
-use serialport::{DataBits, Result, SerialPort, StopBits};
+use std::ffi::c_void;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
+use std::os::raw::c_char;
 use std::pin::Pin;
 use std::time::Duration;
+
+use cxx::CxxString;
+use serialport::{DataBits, Error, Result, SerialPort, StopBits};
+
+use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
 
 pub struct Serial {
     raw_port: Box<dyn SerialPort>,
@@ -43,7 +47,7 @@ impl Serial {
                 CharSize::Six => DataBits::Six,
                 CharSize::Seven => DataBits::Seven,
                 CharSize::Eight => DataBits::Eight,
-                _ => DataBits::Eight
+                _ => DataBits::Eight,
             })
             .is_ok()
     }
@@ -87,7 +91,7 @@ impl Serial {
                 Parity::Even => serialport::Parity::Even,
                 Parity::Odd => serialport::Parity::Odd,
                 Parity::None => serialport::Parity::None,
-                _ => serialport::Parity::None
+                _ => serialport::Parity::None,
             })
             .is_ok()
     }
@@ -104,7 +108,7 @@ impl Serial {
                 FlowControl::Hardware => serialport::FlowControl::Hardware,
                 FlowControl::Software => serialport::FlowControl::Software,
                 FlowControl::None => serialport::FlowControl::None,
-                _ => serialport::FlowControl::None
+                _ => serialport::FlowControl::None,
             })
             .is_ok()
     }
@@ -192,7 +196,7 @@ impl Serial {
         let mut rust_buff = String::new();
         let cloned_port = self.raw_port.try_clone();
 
-        if let Err(_) = cloned_port {
+        if cloned_port.is_err() {
             return ReadResult {
                 error: SerialError::PortIOErr,
                 bytes_read: 0,
@@ -224,11 +228,78 @@ impl Serial {
         }
     }
 
-    //TODO add a async reader using another thread and BufRead around the ports reader
+    /// Creates a builder to build a reader on this port. This reader will asynchronously read
+    /// lines from the port, and perform a callback on each. The settings this reader will use will
+    /// be the same as this serial port *At the time of this function call*, and will not reflect
+    /// future updates.
+    ///
+    /// This function will throw if the port handle cannot be cloned.
+    /// # Usage
+    /// In order to build, first call this function, catch the exception, and then use [serialcxx::add_read_callback]
+    /// to add the reader callback to this builder. This function is free due to a limitation in the
+    /// codegen library used. If this callback is not added, then building will throw.
+    pub fn create_listener_builder(&self) -> Result<Box<SerialListenerBuilder>> {
+        let clone = self.raw_port.try_clone()?;
+
+        Ok(Box::from(SerialListenerBuilder {
+            reader: Option::from(BufReader::new(clone)),
+            callback: None,
+        }))
+    }
 }
 
 /// Attempts to open the serial device at path, using the specified baud rate.
 /// Defaults to a timeout of 99999 seconds.
 pub fn open_port(path: &str, baud: u32) -> Result<Box<Serial>> {
     Ok(Box::from(Serial::new(path, baud)?))
+}
+
+pub struct SerialListenerBuilder {
+    pub reader: Option<BufReader<Box<dyn SerialPort>>>, //This is optional as it allows us to 'move' into the listener without move available in cxx.
+    pub callback: Option<(
+        *mut c_void,
+        unsafe extern "C" fn(user_data: *mut c_void, string_read: *const c_char, str_size: usize),
+    )>,
+}
+
+impl SerialListenerBuilder {
+    /// Attempts to build a listener. This function should be considered to move the builder, and
+    /// will throw if the same builder is used twice.
+    ///
+    /// This function will throw if the callback is not set, or this builder is used twice.
+    pub fn build(&mut self) -> Result<Box<SerialListener>> {
+        if self.callback.is_none() {
+            Err(Error::new(
+                serialport::ErrorKind::InvalidInput,
+                "No callback provided to reader builder.",
+            ))
+        } else if self.reader.is_none() {
+            Err(Error::new(
+                serialport::ErrorKind::InvalidInput,
+                "Attempting to reuse spent builder. Please make another instead.",
+            ))
+        } else {
+            Ok(Box::from(SerialListener {
+                callback: self.callback.unwrap(),
+                reader: self.reader.take().unwrap(), //Note the take-foo to avoid a move
+            }))
+        }
+    }
+
+    /// Gets a pointer to self. Shim to avoid messing with rust::box. Use this to pass this builder
+    /// to to the callback adder function.
+    ///
+    /// Obviously dont free this pointer or things will blow up.
+    pub fn self_ptr(&mut self) -> *mut SerialListenerBuilder {
+        self as *mut SerialListenerBuilder
+    }
+}
+
+pub struct SerialListener {
+    //TODO add thread
+    reader: BufReader<Box<dyn SerialPort>>,
+    callback: (
+        *mut c_void,
+        unsafe extern "C" fn(user_data: *mut c_void, string_read: *const c_char, str_size: usize),
+    ),
 }
