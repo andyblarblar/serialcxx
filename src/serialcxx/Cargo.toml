@@ -8,6 +8,7 @@ edition = "2021"
 cxx = "1.0"
 serialport = { version = "4.0" }
 cancellation = "0.1.0"
+parking_lot = "0.11"
 
 [build-dependencies]
 cxx-build = "1.0"

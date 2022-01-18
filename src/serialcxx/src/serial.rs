@@ -1,16 +1,23 @@
 use std::ffi::c_void;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Take, Write};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Write;
 use std::os::raw::c_char;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::Duration;
 
 use cancellation::CancellationTokenSource;
-use cxx::{CxxString};
+use cxx::CxxString;
 use serialport::{DataBits, Error, Result, SerialPort, StopBits};
 
 use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
 use crate::serial_ext::{CVoidSend, SerialPortReader};
+
+pub(crate) type Mutex<T> = parking_lot::Mutex<T>;
+pub(crate) type MutexGuard<'a, T> = parking_lot::MutexGuard<'a, T>;
 
 //TODO remove warnings about settings not syncing, as they do now.
 
@@ -44,7 +51,7 @@ impl Serial {
         //Clone that handle to allow for access as a dyn SerialPort for settings changes
         let port_reader_settings = port_clone.clone();
         //Move og handle into a wrapper object that impls Read by delegating to SerialPorts impl, bypassing Rust's lack of Trait casting.
-        let port_reader = SerialPortReader { inner: port_clone };
+        let port_reader = SerialPortReader::new(port_clone);
 
         Ok(Serial {
             write_handle: Mutex::new(raw_port),
@@ -62,8 +69,8 @@ impl Serial {
         MutexGuard<'_, Box<dyn SerialPort>>,
         MutexGuard<'_, Box<dyn SerialPort>>,
     ) {
-        let read_settings_lock = self.read_settings_handle.lock().unwrap(); //TODO I dont think we can poison our mutex, so we can prob use unsafe here, as panicking in ffi is already UB.
-        let write_lock = self.write_handle.lock().unwrap();
+        let read_settings_lock = self.read_settings_handle.lock();
+        let write_lock = self.write_handle.lock();
 
         (read_settings_lock, write_lock)
     }
@@ -233,7 +240,7 @@ impl Serial {
     /// - Interrupted - The device transfer was interrupted. You may retry this transfer.
     /// - Other - Any other kind of device failure, such as a disconnect.
     pub fn write(&mut self, data: &[u8]) -> SerialError {
-        let mut write_handle = self.write_handle.lock().unwrap();
+        let mut write_handle = self.write_handle.lock();
         let res = write_handle.write_all(data);
 
         match res {
@@ -253,7 +260,7 @@ impl Serial {
     /// - Interrupted - The device transfer was interrupted. You may retry this transfer.
     /// - Other - Any other kind of device failure, such as a disconnect.
     pub fn write_str(&mut self, data: &CxxString) -> SerialError {
-        let mut write_handle = self.write_handle.lock().unwrap();
+        let mut write_handle = self.write_handle.lock();
         let res = write_handle.write_all(data.as_bytes());
 
         match res {
@@ -275,7 +282,7 @@ impl Serial {
     /// - Interrupted - The device transfer was interrupted. You may retry this transfer.
     /// - Other - Any other kind of device failure, such as a disconnect.
     pub fn read(&mut self, read_buff: &mut [u8]) -> ReadResult {
-        let mut read_handle = self.read_handle.lock().unwrap();
+        let mut read_handle = self.read_handle.lock();
         let read_num = read_handle.read(read_buff);
 
         match read_num {
@@ -308,7 +315,7 @@ impl Serial {
     /// - PortIOErr - The port failed to clone handle for reads.
     /// - Other - Any other kind of device failure, such as a disconnect.
     pub fn read_line(&mut self, read_buff: Pin<&mut CxxString>) -> ReadResult {
-        let mut read_handle = self.read_handle.lock().unwrap();
+        let mut read_handle = self.read_handle.lock();
         let mut rust_buff = String::new();
 
         let read_num = read_handle.read_line(&mut rust_buff);
