@@ -1,22 +1,23 @@
-#Gets udev for port enumeration
-include(../cmake/findUdev.cmake)
 
 #Compile and add the rust lib to the tree with name "ealovega::serialcxx"
 add_library_rust(PATH serialcxx NAMESPACE ealovega)
 
-#TODO add a windows equivelent to udev include to allow for this library to be used on windows.
-#Rn it linker errors due to this not being included. just if else over windows and linux.
 
-#Include the udev include files and shared lib, needed for port enumeration on linux.
-target_include_directories(serialcxx-total
-        INTERFACE
-        ${UDEV_INCLUDE_DIRS}
-        )
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
 
-target_link_libraries(serialcxx-total
-        INTERFACE
-        ${UDEV_LIBRARIES}
-        )
+elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+    #Include the udev include files and shared lib, needed for port enumeration on linux.
+    include(../cmake/findUdev.cmake)
+    target_include_directories(serialcxx-total
+            INTERFACE
+            ${UDEV_INCLUDE_DIRS}
+            )
+
+    target_link_libraries(serialcxx-total
+            INTERFACE
+            ${UDEV_LIBRARIES}
+            )
+endif ()
 
 #TODO ignore this last part unless a test flag is set, the above exposes the library to others in the tree already.
 

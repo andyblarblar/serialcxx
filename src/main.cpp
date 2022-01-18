@@ -15,7 +15,7 @@ int main() {
 
   auto builder = readPort->create_listener_builder();
   serialcxx::add_read_callback(builder->self_ptr(), nullptr, &testCall);
-  auto listener = builder->build();
+  auto listener = builder->build(); //TODO use this listener once programmed
 
   auto str = "Hello From C++!\n";
   port->write_str(str);
@@ -27,7 +27,7 @@ int main() {
     printf("Error!");
   }
 
-  printf("This message was %lu bytes. \n", res.bytes_read);
+  printf("This message was %llu bytes. \n", res.bytes_read);
   printf("This message was '%s'", buff.c_str());
 
   return 0;

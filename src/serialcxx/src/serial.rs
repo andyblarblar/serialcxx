@@ -2,9 +2,12 @@ use std::ffi::c_void;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::os::raw::c_char;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::thread::Thread;
 use std::time::Duration;
+use cancellation::CancellationTokenSource;
 
-use cxx::CxxString;
+use cxx::{CxxString, P};
 use serialport::{DataBits, Error, Result, SerialPort, StopBits};
 
 use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
@@ -254,6 +257,9 @@ pub fn open_port(path: &str, baud: u32) -> Result<Box<Serial>> {
     Ok(Box::from(Serial::new(path, baud)?))
 }
 
+
+
+
 pub struct SerialListenerBuilder {
     pub reader: Option<BufReader<Box<dyn SerialPort>>>, //This is optional as it allows us to 'move' into the listener without move available in cxx.
     pub callback: Option<(
@@ -281,7 +287,8 @@ impl SerialListenerBuilder {
         } else {
             Ok(Box::from(SerialListener {
                 callback: self.callback.unwrap(),
-                reader: self.reader.take().unwrap(), //Note the take-foo to avoid a move
+                reader: Arc::from(self.reader.take().unwrap()), //Note the take-foo to avoid a move
+                cts: CancellationTokenSource::new(),
             }))
         }
     }
@@ -295,11 +302,27 @@ impl SerialListenerBuilder {
     }
 }
 
+
+
+
 pub struct SerialListener {
-    //TODO add thread
-    reader: BufReader<Box<dyn SerialPort>>,
+    reader: Arc<BufReader<Box<dyn SerialPort>>>,
     callback: (
         *mut c_void,
         unsafe extern "C" fn(user_data: *mut c_void, string_read: *const c_char, str_size: usize),
     ),
+    cts: CancellationTokenSource,
+}
+
+impl SerialListener {
+    fn listen(&self) {
+        //The cancellation token is the only way we have to kill the listener thread.
+        let token = self.cts.token();
+        let reader = self.reader.clone();
+
+        let thread = std::thread::spawn(move || {
+            let (user_data, read_callback) = self.callback;
+
+        });
+    }
 }

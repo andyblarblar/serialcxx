@@ -7,6 +7,7 @@ edition = "2021"
 [dependencies]
 cxx = "1.0"
 serialport = { version = "4.0" }
+cancellation = "0.1.0"
 
 [build-dependencies]
 cxx-build = "1.0"
@@ -18,7 +19,7 @@ crate-type = ["staticlib"]
 [profile.release]
 debug = true
 panic = "abort"
-lto = "thin"
+#lto = "thin"
 
 [profile.dev]
 panic = "abort"
