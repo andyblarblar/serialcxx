@@ -1,5 +1,6 @@
 mod bindgenffi;
 mod serial;
+mod serial_ext;
 
 use serial::*;
 use serialport::Result;
