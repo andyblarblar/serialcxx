@@ -19,8 +19,6 @@ use crate::serial_ext::{CVoidSend, SerialPortReader};
 pub(crate) type Mutex<T> = parking_lot::Mutex<T>;
 pub(crate) type MutexGuard<'a, T> = parking_lot::MutexGuard<'a, T>;
 
-//TODO remove warnings about settings not syncing, as they do now.
-
 /// The Rust side of the serial facade.
 ///
 /// # Implementation
@@ -30,6 +28,9 @@ pub(crate) type MutexGuard<'a, T> = parking_lot::MutexGuard<'a, T>;
 /// This is also what allows us to share the reader handle with the listener, while also allowing for
 /// reads from the main handle with the listener going. Only one of the ports will get the data, but
 /// at least that doesn't break the internal state of the serial port implementation (platform specific).
+/// The reader has two mutexes, as it needs to allow for threaded access to the reader itself, as well
+/// as threaded access to the raw handle itself, as the settings of all handles can be changed across
+/// Threads. These mutexes should rarely be contested, so the performance hit shouldn't be too bad.
 pub struct Serial {
     write_handle: Mutex<Box<dyn SerialPort>>,
     /// Shared mutex over a reader (shared between main and listener threads) that houses a shared mutex to a handle (Shared to allow for changing settings across all readers).
@@ -78,9 +79,6 @@ impl Serial {
     /// Sets the timeout for this port.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_timeout(&mut self, sec: f32) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -98,9 +96,6 @@ impl Serial {
     /// Sets the character size of this port.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_data_size(&mut self, bits: CharSize) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -130,9 +125,6 @@ impl Serial {
     /// Sets the baud rate of the port.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_baud_rate(&mut self, baud: u32) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -147,9 +139,6 @@ impl Serial {
     /// True for two stop bits, false for one.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_stop_bits(&mut self, two_bits: bool) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -175,9 +164,6 @@ impl Serial {
     /// Sets the parity checking mode.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_parity(&mut self, mode: Parity) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -205,9 +191,6 @@ impl Serial {
     /// Sets the flow control mode.
     ///
     /// Returns true if the operation succeeded.
-    ///
-    /// Note that settings changes will not propagate between the serial port and any open readers
-    /// or other clones. Consider configuring the port before cloning.
     pub fn set_flow_control(&mut self, mode: FlowControl) -> bool {
         let (mut read_handle, mut write_handle) = self.lock_both_handles();
 
@@ -342,9 +325,8 @@ impl Serial {
     }
 
     /// Creates a builder to build a reader on this port. This reader will asynchronously read
-    /// lines from the port, and perform a callback on each. The settings this reader will use will
-    /// be the same as this serial port *At the time of this function call*, and will not reflect
-    /// future updates.
+    /// lines from the port, and perform a callback on each. This reader will inherit all settings from
+    /// this port, including any changes after this call.
     ///
     /// This function will throw if the port handle cannot be cloned.
     /// # Usage
