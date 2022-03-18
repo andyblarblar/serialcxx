@@ -51,6 +51,8 @@ pub mod ffi {
 
     //The Serial class
     extern "Rust" {
+
+        /// Provides full duplex access to a serial port in a safe manner.
         type Serial;
 
         /// Attempts to write the entire buffer of bytes to the serial device.
@@ -146,6 +148,8 @@ pub mod ffi {
         /// codegen library used. If this callback is not added, then building will throw.
         pub fn create_listener_builder(self: &Serial) -> Result<Box<SerialListenerBuilder>>;
 
+
+
         /// Attempts to build a listener. This function should be considered to move the builder, and
         /// will throw if the same builder is used twice.
         ///
@@ -157,5 +161,22 @@ pub mod ffi {
         ///
         /// Obviously dont free this pointer or things will blow up.
         pub fn self_ptr(self: &mut SerialListenerBuilder) -> *mut SerialListenerBuilder;
+
+
+
+        /// Starts the listener thread, calling the callback on each line read from the port.
+        ///
+        /// This call will lock the read handle to the serialport for as long as the thread is alive.
+        /// This means any calls to [Serial::read], [Serial::read_line], or other listeners will block
+        /// until this listener dies.
+        ///
+        /// To end this listener, call [stop] or [SerialListener]'s destructor (they do the same thing).
+        pub fn listen(self: & SerialListener);
+
+        /// Stops the listener.
+        ///
+        /// This should be considered a move of this listener, as any future calls to listen will instantly
+        /// complete after this is called. You need to build a new listener to listen again.
+        pub fn stop(self: & SerialListener);
     }
 }

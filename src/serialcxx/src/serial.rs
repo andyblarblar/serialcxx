@@ -21,16 +21,29 @@ pub(crate) type MutexGuard<'a, T> = parking_lot::MutexGuard<'a, T>;
 
 /// The Rust side of the serial facade.
 ///
+/// # Safety
+/// This library is designed to prevent improper use at runtime, something C++ is poor at.
+/// In particular, it is threadsafe, meaning that concurrent calls to reads/writes will block until
+/// one thread finishes. Similarly, async reads through listeners prevent all other reads while alive,
+/// preventing accidental reads from the main thread. In general, this libraries priorities are
+/// 1) safety 2) ergonomics 3) performence.
+///
 /// # Implementation
 /// This object contains two separate handles to the same serial port. One is for reading, and one
 /// is for writing. Each of these ports sit behind a Mutex. This means that this Serial object is
 /// thread safe from the C++ side, at the cost of a lock acquisition on each read and write call.
-/// This is also what allows us to share the reader handle with the listener, while also allowing for
-/// reads from the main handle with the listener going. Only one of the ports will get the data, but
-/// at least that doesn't break the internal state of the serial port implementation (platform specific).
+/// This is also what allows us to share the reader handle with the listener, while ensuring only
+/// the listener can read from the port while alive.
 /// The reader has two mutexes, as it needs to allow for threaded access to the reader itself, as well
 /// as threaded access to the raw handle itself, as the settings of all handles can be changed across
 /// Threads. These mutexes should rarely be contested, so the performance hit shouldn't be too bad.
+///
+/// # Listeners
+/// Listeners allow for full duplex communication without needing to mess with threads in C++.
+/// When you spawn a listener, *it will be the only thread allowed to read from the port for its lifetime*.
+/// This means that calls to any other read function (not including settings functions but including other listeners) will block
+/// until the thread dies. Once the thread dies, there will be a race on the mutex. It is for this reason
+/// that there should be no more than one listener alive at once.
 pub struct Serial {
     write_handle: Mutex<Box<dyn SerialPort>>,
     /// Shared mutex over a reader (shared between main and listener threads) that houses a shared mutex to a handle (Shared to allow for changing settings across all readers).
@@ -398,36 +411,61 @@ pub struct SerialListener {
         CVoidSend,
         unsafe extern "C" fn(user_data: *mut c_void, string_read: *const c_char, str_size: usize),
     ),
+    /// Token used to kill the thread.
     cts: CancellationTokenSource,
 }
 
 impl SerialListener {
+    /// Starts the listener thread, calling the callback on each line read from the port.
+    ///
+    /// This call will lock the read handle to the serialport for as long as the thread is alive.
+    /// This means any calls to [Serial::read], [Serial::read_line], or other listeners will block
+    /// until this listener dies.
+    ///
+    /// To end this listener, call [stop] or [SerialListener]'s destructor (they do the same thing).
     pub fn listen(&self) {
         //The cancellation token is the only way we have to kill the listener thread.
         let token = self.cts.token().clone();
         let reader = self.reader.clone();
         let callback = self.callback;
 
-        let thread = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let (user_data, callback) = callback;
-            //Lock the reader while this listener is active TODO document
+            //Lock the reader while this listener is active
             let mut reader = reader.lock();
 
             while !token.is_canceled() {
-                let mut str_buf = String::new(); //TODO make this reuse storage via allocator
-                let read_num = reader.read_line(&mut str_buf);
+                let mut str_buf = String::with_capacity(40);
+                let read_num = reader.read_line(&mut str_buf); //TODO strip the newline off this
 
                 if let Ok(num) = read_num {
                     if num != 0 {
-                        let c_str = CString::new(str_buf).unwrap();//TODO handle unwrap
-                        callback(user_data, c_str.as_ptr(), num);
+                        let c_str = CString::new(str_buf).unwrap(); //TODO handle unwrap
+
+                        unsafe {
+                            //Safe only if callback does not store a reference to the string, which it does not own.
+                            callback(user_data.0, c_str.as_ptr(), num);
+                        }
                     }
                 }
             }
 
             println!("exiting reader") //TODO change to log facade
-        }); //TODO impl
+        });
+        //Thread detaches here
+    }
 
-        //Thread is detached here
+    /// Stops the listener.
+    ///
+    /// This should be considered a move of this listener, as any future calls to listen will instantly
+    /// complete after this is called. You need to build a new listener to listen again.
+    pub fn stop(&self) {
+        self.cts.cancel();
+    }
+}
+
+impl Drop for SerialListener {
+    fn drop(&mut self) {
+        self.cts.cancel() //Cancel the detached thread. The token will be kept alive by the thread, so this doesn't create a dangling pointer.
     }
 }
