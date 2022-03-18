@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr, CString};
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::ErrorKind;
@@ -402,14 +402,32 @@ pub struct SerialListener {
 }
 
 impl SerialListener {
-    fn listen(&self) {
+    pub fn listen(&self) {
         //The cancellation token is the only way we have to kill the listener thread.
-        let token = self.cts.token();
+        let token = self.cts.token().clone();
         let reader = self.reader.clone();
-        let callback = self.callback.clone();
+        let callback = self.callback;
 
         let thread = std::thread::spawn(move || {
             let (user_data, callback) = callback;
+            //Lock the reader while this listener is active TODO document
+            let mut reader = reader.lock();
+
+            while !token.is_canceled() {
+                let mut str_buf = String::new(); //TODO make this reuse storage via allocator
+                let read_num = reader.read_line(&mut str_buf);
+
+                if let Ok(num) = read_num {
+                    if num != 0 {
+                        let c_str = CString::new(str_buf).unwrap();//TODO handle unwrap
+                        callback(user_data, c_str.as_ptr(), num);
+                    }
+                }
+            }
+
+            println!("exiting reader") //TODO change to log facade
         }); //TODO impl
+
+        //Thread is detached here
     }
 }

@@ -20,6 +20,7 @@ crate-type = ["staticlib"]
 [profile.release]
 debug = true
 panic = "abort"
+strip = true
 #lto = "thin"
 
 [profile.dev]
