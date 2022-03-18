@@ -316,8 +316,8 @@ impl Serial {
 
         let read_num = read_handle.read_line(&mut rust_buff);
 
-        //Copy rust string to C++. Use lines iter to remove newline. This can prob be more efficient.
-        read_buff.push_str(rust_buff.lines().take(1).collect::<String>().as_str());
+        //Copy rust string to C++, removing newline
+        read_buff.push_str(&rust_buff[..rust_buff.len() - 1]);
 
         match read_num {
             Ok(bytes_read) => ReadResult {
@@ -429,6 +429,9 @@ impl SerialListener {
         let reader = self.reader.clone();
         let callback = self.callback;
 
+        //Lock the mutex to prevent a race before this thread spawns
+        let _out_lock = self.reader.lock();
+
         std::thread::spawn(move || {
             let (user_data, callback) = callback;
             //Lock the reader while this listener is active
@@ -436,15 +439,17 @@ impl SerialListener {
 
             while !token.is_canceled() {
                 let mut str_buf = String::with_capacity(40);
-                let read_num = reader.read_line(&mut str_buf); //TODO strip the newline off this
+                let read_num = reader.read_line(&mut str_buf);
 
                 if let Ok(num) = read_num {
                     if num != 0 {
-                        let c_str = CString::new(str_buf).unwrap(); //TODO handle unwrap
+                        //Strip newline and add nullchar
+                        let c_str = CString::new(&str_buf[..str_buf.len() - 1]).unwrap(); //TODO handle unwrap
 
                         unsafe {
                             //Safe only if callback does not store a reference to the string, which it does not own.
                             callback(user_data.0, c_str.as_ptr(), num);
+                            println!("out of callback")
                         }
                     }
                 }

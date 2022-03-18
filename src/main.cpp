@@ -1,15 +1,20 @@
 #include "serialcxx/serialcxx.hpp"
 #include <iostream>
+#include <chrono>
+
+std::chrono::steady_clock cl;
 
 void testCall(void *userdata, const char *str, uintptr_t size) {
-  printf("Read '%s' from the listener!", str);
+  auto post = cl.now();
+  printf("Recived at: %li \n", post.time_since_epoch().count());
+  printf("Read '%s' from the listener!\n", str);
 }
 
 //Test with socat -d -d pty,raw,echo=0 pty,raw,echo=0
 int main() {
   //Open ports
-  auto readPort = serialcxx::open_port("/dev/pts/3", 115'000);
-  auto port = serialcxx::open_port("/dev/pts/4", 115'000);
+  auto readPort = serialcxx::open_port("/dev/pts/2", 115'000);
+  auto port = serialcxx::open_port("/dev/pts/3", 115'000);
 
   //Change port settings
   port->set_timeout(2.5);
@@ -41,7 +46,12 @@ int main() {
   auto str2 = "This should be in the listener\n!";
   port->write_str(str2);
 
-  for (int i = 0; i < 1000000000; ++i) {
+  for (int i = 0; i < 100; ++i) {
+    auto str3 = "on iteration!" + std::to_string(i) + "\n";
+
+    auto pre = cl.now();
+    printf("Sent at: %li \n", pre.time_since_epoch().count());
+    port->write_str(str3);
   }
 
   return 0;
