@@ -4,8 +4,8 @@ add_library_rust(PATH serialcxx NAMESPACE ealovega)
 #Add lto support
 corrosion_add_target_rustflags(serialcxx_cxxbridge -Clinker-plugin-lto)
 
-set_property(TARGET serialcxx_cxxbridge 
-             PROPERTY Rust_TOOLCHAIN "stable")
+set_property(TARGET serialcxx_cxxbridge
+        PROPERTY Rust_TOOLCHAIN "stable")
 
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
 
@@ -33,11 +33,10 @@ target_sources(${PROJECT_NAME}-test
         main.cpp
         )
 
+message("Using Clang with LTO")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto")
 target_link_libraries(${PROJECT_NAME}-test
         PUBLIC
         ealovega::serialcxx
+        -flto
         )
-
-include(CheckIPOSupported)
-check_ipo_supported()
-set_target_properties(${PROJECT_NAME}-test PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)

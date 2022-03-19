@@ -243,6 +243,7 @@ impl Serial {
             Ok(_) => SerialError::NoErr,
             Err(err) => match err.kind() {
                 ErrorKind::Interrupted => SerialError::Interrupted,
+                ErrorKind::TimedOut => SerialError::Timeout,
                 _ => SerialError::Other,
             },
         }
@@ -263,6 +264,7 @@ impl Serial {
             Ok(_) => SerialError::NoErr,
             Err(err) => match err.kind() {
                 ErrorKind::Interrupted => SerialError::Interrupted,
+                ErrorKind::TimedOut => SerialError::Timeout,
                 _ => SerialError::Other,
             },
         }
@@ -291,6 +293,10 @@ impl Serial {
                     error: SerialError::Interrupted,
                     bytes_read: 0,
                 },
+                ErrorKind::TimedOut => ReadResult {
+                    error: SerialError::Timeout,
+                    bytes_read: 0,
+                },
                 _ => ReadResult {
                     error: SerialError::Other,
                     bytes_read: 0,
@@ -316,17 +322,25 @@ impl Serial {
 
         let read_num = read_handle.read_line(&mut rust_buff);
 
-        //Copy rust string to C++, removing newline
-        read_buff.push_str(&rust_buff[..rust_buff.len() - 1]);
-
         match read_num {
-            Ok(bytes_read) => ReadResult {
-                error: SerialError::NoErr,
-                bytes_read,
-            },
+            Ok(bytes_read) => {
+                //Copy rust string to C++, removing newline
+                if bytes_read > 0 {
+                    read_buff.push_str(&rust_buff[..rust_buff.len() - 1])
+                };
+
+                ReadResult {
+                    error: SerialError::NoErr,
+                    bytes_read,
+                }
+            }
             Err(err) => match err.kind() {
                 ErrorKind::Interrupted => ReadResult {
                     error: SerialError::Interrupted,
+                    bytes_read: 0,
+                },
+                ErrorKind::TimedOut => ReadResult {
+                    error: SerialError::Timeout,
                     bytes_read: 0,
                 },
                 _ => ReadResult {
@@ -442,7 +456,7 @@ impl SerialListener {
                 let read_num = reader.read_line(&mut str_buf);
 
                 if let Ok(num) = read_num {
-                    if num != 0 {
+                    if num > 0 {
                         //Strip newline and add nullchar
                         let c_str = CString::new(&str_buf[..str_buf.len() - 1]).unwrap(); //TODO handle unwrap
 

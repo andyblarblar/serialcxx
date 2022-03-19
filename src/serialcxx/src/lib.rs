@@ -22,6 +22,8 @@ pub mod ffi {
     pub enum SerialError {
         /// The operation succeeded.
         NoErr = 0,
+        /// The action timed out.
+        Timeout,
         /// The operation was interrupted, but did not fail. Can be started again.
         Interrupted,
         /// The port errored while opening or cloning.
