@@ -1,10 +1,10 @@
+//! The bindings bridge.
+
 mod bindgenffi;
 mod serial;
+mod serial_ext;
 
 use serial::*;
-use serialport::Result;
-use std::ffi::c_void;
-use std::os::raw::c_char;
 
 #[cxx::bridge(namespace = "serialcxx")]
 pub mod ffi {
@@ -19,6 +19,8 @@ pub mod ffi {
     pub enum SerialError {
         /// The operation succeeded.
         NoErr = 0,
+        /// The action timed out.
+        Timeout,
         /// The operation was interrupted, but did not fail. Can be started again.
         Interrupted,
         /// The port errored while opening or cloning.
@@ -48,6 +50,8 @@ pub mod ffi {
 
     //The Serial class
     extern "Rust" {
+
+        /// Provides full duplex access to a serial port in a safe manner.
         type Serial;
 
         /// Attempts to write the entire buffer of bytes to the serial device.
@@ -98,50 +102,32 @@ pub mod ffi {
         /// Sets the timeout for this port.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_timeout(self: &mut Serial, sec: f32) -> bool;
 
         /// Sets the character size of this port.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_data_size(self: &mut Serial, bits: CharSize) -> bool;
 
         /// Sets the baud rate of the port.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_baud_rate(self: &mut Serial, baud: u32) -> bool;
 
         /// Sets the number of stop bits.
         /// True for two stop bits, false for one.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_stop_bits(self: &mut Serial, two_bits: bool) -> bool;
 
         /// Sets the parity checking mode.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_parity(self: &mut Serial, mode: Parity) -> bool;
 
         /// Sets the flow control mode.
         ///
         /// Returns true if the operation succeeded.
-        ///
-        /// Note that settings changes will not propagate between the serial port and any open readers
-        /// or other clones. Consider configuring the port before cloning.
         pub fn set_flow_control(self: &mut Serial, mode: FlowControl) -> bool;
     }
 
@@ -150,9 +136,8 @@ pub mod ffi {
         type SerialListener;
 
         /// Creates a builder to build a reader on this port. This reader will asynchronously read
-        /// lines from the port, and perform a callback on each. The settings this reader will use will
-        /// be the same as this serial port *At the time of this function call*, and will not reflect
-        /// future updates.
+        /// lines from the port, and perform a callback on each. This reader will inherit all settings from
+        /// this port, including any changes after this call.
         ///
         /// This function will throw if the port handle cannot be cloned.
         /// # Usage
@@ -160,6 +145,8 @@ pub mod ffi {
         /// to add the reader callback to this builder. This function is free due to a limitation in the
         /// codegen library used. If this callback is not added, then building will throw.
         pub fn create_listener_builder(self: &Serial) -> Result<Box<SerialListenerBuilder>>;
+
+
 
         /// Attempts to build a listener. This function should be considered to move the builder, and
         /// will throw if the same builder is used twice.
@@ -172,5 +159,27 @@ pub mod ffi {
         ///
         /// Obviously dont free this pointer or things will blow up.
         pub fn self_ptr(self: &mut SerialListenerBuilder) -> *mut SerialListenerBuilder;
+
+
+
+        /// Starts the listener thread, calling the callback on each line read from the port.
+        ///
+        /// This call will lock the read handle to the serialport for as long as the thread is alive.
+        /// This means any calls to [Serial::read], [Serial::read_line], or other listeners will block
+        /// until this listener dies.
+        ///
+        /// To end this listener, call [stop] or [SerialListener]'s destructor (they do the same thing).
+        ///
+        /// # Notes
+        /// The listener thread reads in an infinite loop. Each iteration is at most as long as the serial
+        /// ports timout configuration. Because of this, listeners can have very poor performance with very low
+        /// timeout values.
+        pub fn listen(self: & SerialListener);
+
+        /// Stops the listener.
+        ///
+        /// This should be considered a move of this listener, as any future calls to listen will instantly
+        /// complete after this is called. You need to build a new listener to listen again.
+        pub fn stop(self: & SerialListener);
     }
 }

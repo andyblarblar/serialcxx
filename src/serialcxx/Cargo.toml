@@ -8,6 +8,9 @@ edition = "2021"
 cxx = "1.0"
 serialport = { version = "4.0" }
 cancellation = "0.1.0"
+parking_lot = "0.12"
+
+log = "0.4.14"
 
 [build-dependencies]
 cxx-build = "1.0"
@@ -17,9 +20,8 @@ cbindgen = "0.20.0"
 crate-type = ["staticlib"]
 
 [profile.release]
-debug = true
 panic = "abort"
-#lto = "thin"
+strip = true
 
 [profile.dev]
 panic = "abort"
