@@ -5,9 +5,6 @@ mod serial;
 mod serial_ext;
 
 use serial::*;
-use serialport::Result;
-use std::ffi::c_void;
-use std::os::raw::c_char;
 
 #[cxx::bridge(namespace = "serialcxx")]
 pub mod ffi {
@@ -139,9 +136,8 @@ pub mod ffi {
         type SerialListener;
 
         /// Creates a builder to build a reader on this port. This reader will asynchronously read
-        /// lines from the port, and perform a callback on each. The settings this reader will use will
-        /// be the same as this serial port *At the time of this function call*, and will not reflect
-        /// future updates.
+        /// lines from the port, and perform a callback on each. This reader will inherit all settings from
+        /// this port, including any changes after this call.
         ///
         /// This function will throw if the port handle cannot be cloned.
         /// # Usage
@@ -173,6 +169,11 @@ pub mod ffi {
         /// until this listener dies.
         ///
         /// To end this listener, call [stop] or [SerialListener]'s destructor (they do the same thing).
+        ///
+        /// # Notes
+        /// The listener thread reads in an infinite loop. Each iteration is at most as long as the serial
+        /// ports timout configuration. Because of this, listeners can have very poor performance with very low
+        /// timeout values.
         pub fn listen(self: & SerialListener);
 
         /// Stops the listener.

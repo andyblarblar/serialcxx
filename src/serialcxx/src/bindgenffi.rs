@@ -11,6 +11,9 @@ use std::os::raw::c_char;
 ///
 /// The remaining two arguments are the read string and it's size respectively.
 ///
+/// You *Do not* have ownership over this string. After the callback returns, the string will be freed,
+/// leaving a dangling pointer if you stored this pointer somewhere.
+///
 /// The function will return false if the callback was not set due to null pointers being passed.
 /// # Null policy
 /// Listener must not be null, call must not be null, user_data may be null.

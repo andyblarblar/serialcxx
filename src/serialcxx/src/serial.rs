@@ -1,4 +1,4 @@
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{c_void, CString};
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::ErrorKind;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cancellation::CancellationTokenSource;
-use cxx::CxxString;
+use cxx::{CxxString};
 use serialport::{DataBits, Error, Result, SerialPort, StopBits};
 
 use crate::ffi::{CharSize, FlowControl, Parity, ReadResult, SerialError};
@@ -437,6 +437,11 @@ impl SerialListener {
     /// until this listener dies.
     ///
     /// To end this listener, call [stop] or [SerialListener]'s destructor (they do the same thing).
+    ///
+    /// # Notes
+    /// The listener thread reads in an infinite loop. Each iteration is at most as long as the serial
+    /// ports timout configuration. Because of this, listeners can have very poor performance with very low
+    /// timeout values.
     pub fn listen(&self) {
         //The cancellation token is the only way we have to kill the listener thread.
         let token = self.cts.token().clone();
@@ -447,29 +452,33 @@ impl SerialListener {
         let _out_lock = self.reader.lock();
 
         std::thread::spawn(move || {
+            log::debug!("Spawned listener");
+
             let (user_data, callback) = callback;
             //Lock the reader while this listener is active
             let mut reader = reader.lock();
 
             while !token.is_canceled() {
                 let mut str_buf = String::with_capacity(40);
-                let read_num = reader.read_line(&mut str_buf);
+                let read_num = reader.read_line(&mut str_buf); //This will wait until timeout
 
                 if let Ok(num) = read_num {
                     if num > 0 {
                         //Strip newline and add nullchar
-                        let c_str = CString::new(&str_buf[..str_buf.len() - 1]).unwrap(); //TODO handle unwrap
+                        let c_str = CString::new(&str_buf[..str_buf.len() - 1]).expect(
+                            "Read String with internal null bytes. This is not C compatible.",
+                        );
 
                         unsafe {
                             //Safe only if callback does not store a reference to the string, which it does not own.
                             callback(user_data.0, c_str.as_ptr(), num);
-                            println!("out of callback")
                         }
+                        log::trace!("out of callback");
                     }
                 }
             }
 
-            println!("exiting reader") //TODO change to log facade
+            log::debug!("exiting listener thread")
         });
         //Thread detaches here
     }
